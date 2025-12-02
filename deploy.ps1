@@ -119,21 +119,46 @@ function Start-Daemon {
     try {
         # 测试CLI命令是否可用
         Write-Host "🔍 测试CLI命令..." -ForegroundColor $Colors.Cyan
+        
+        $testCommand = "$CliCommand --help"
+        Write-Host "   执行命令: $testCommand" -ForegroundColor $Colors.White
+        
         try {
-            $testResult = & cmd /c "$CliCommand --help" 2>&1
-            Write-Host "✅ CLI命令可用" -ForegroundColor $Colors.Green
+            $testResult = & cmd /c $testCommand 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            Write-Host "   命令退出码: $exitCode" -ForegroundColor $Colors.White
+            
+            if ($exitCode -eq 0) {
+                Write-Host "✅ CLI命令可用" -ForegroundColor $Colors.Green
+            }
+            else {
+                Write-Host "❌ CLI命令执行失败，退出码: $exitCode" -ForegroundColor $Colors.Red
+                Write-Host "   输出: $testResult" -ForegroundColor $Colors.Yellow
+                Write-Host "💡 请检查uv和Python环境" -ForegroundColor $Colors.Yellow
+                Read-Host "按回车键继续..."
+                return
+            }
         }
         catch {
-            Write-Host "❌ CLI命令不可用，请检查uv和Python环境" -ForegroundColor $Colors.Red
+            Write-Host "❌ CLI命令执行异常: $($_.Exception.Message)" -ForegroundColor $Colors.Red
             Write-Host "💡 尝试手动运行: $CliCommand --help" -ForegroundColor $Colors.Yellow
+            Read-Host "按回车键继续..."
             return
         }
         
         # 方法1: 使用简单的后台进程启动
         Write-Host "🚀 启动守护进程..." -ForegroundColor $Colors.Cyan
         
+        $startCommand = "cd /d `"$ScriptDir`" && $CliCommand daemon > `"$LogFile`" 2>&1"
+        Write-Host "   启动命令: $startCommand" -ForegroundColor $Colors.White
+        Write-Host "   工作目录: $ScriptDir" -ForegroundColor $Colors.White
+        Write-Host "   日志文件: $LogFile" -ForegroundColor $Colors.White
+        
         # 直接启动进程并重定向输出
-        $process = Start-Process -FilePath "cmd" -ArgumentList "/c", "$CliCommand daemon > `"$LogFile`" 2>&1" -WindowStyle Hidden -PassThru
+        Write-Host "   正在启动进程..." -ForegroundColor $Colors.Cyan
+        $process = Start-Process -FilePath "cmd" -ArgumentList "/c", $startCommand -WindowStyle Hidden -PassThru
+        Write-Host "   进程已启动，PID: $($process.Id)" -ForegroundColor $Colors.Green
         
         # 保存PID
         $process.Id | Out-File $PidFile -Encoding ASCII
@@ -177,12 +202,16 @@ function Start-Daemon {
     }
     catch {
         Write-Host "❌ 启动守护进程时出错: $($_.Exception.Message)" -ForegroundColor $Colors.Red
+        Write-Host "   错误详情: $($_.Exception.GetType().Name)" -ForegroundColor $Colors.Yellow
+        Write-Host "   错误位置: $($_.InvocationInfo.ScriptLineNumber)" -ForegroundColor $Colors.Yellow
         
         # 备用方法: 直接使用cmd启动
         Write-Host "🔄 尝试备用启动方法..." -ForegroundColor $Colors.Yellow
         try {
+            Write-Host "   使用PowerShell直接启动..." -ForegroundColor $Colors.Cyan
             $process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Set-Location '$ScriptDir'; & $CliCommand daemon" -WindowStyle Hidden -PassThru -RedirectStandardOutput $LogFile -RedirectStandardError $LogFile
             $process.Id | Out-File $PidFile -Encoding ASCII
+            Write-Host "   备用进程已启动，PID: $($process.Id)" -ForegroundColor $Colors.Green
             
             Start-Sleep -Seconds 3
             if (Test-DaemonStatus) {
@@ -196,6 +225,8 @@ function Start-Daemon {
         catch {
             Write-Host "❌ 备用方法也失败: $($_.Exception.Message)" -ForegroundColor $Colors.Red
         }
+        
+        Read-Host "按回车键继续..."
     }
 }
 

@@ -77,6 +77,21 @@ goto show_help
     )
     
     set /p daemon_pid=<"%PID_FILE%"
+    
+    REM 如果是占位符，检查日志文件和进程
+    if "%daemon_pid%"=="placeholder" (
+        REM 检查日志文件是否还在更新
+        if exist "%LOG_FILE%" (
+            REM 检查是否有daemon进程在运行
+            tasklist | findstr /i "python.exe" >nul
+            if %errorlevel% equ 0 (
+                exit /b 0
+            )
+        )
+        exit /b 1
+    )
+    
+    REM 正常PID检查
     tasklist /fi "pid eq %daemon_pid%" 2>nul | find "%daemon_pid%" >nul
     if %errorlevel% equ 0 (
         exit /b 0
@@ -122,7 +137,8 @@ goto show_help
     
     REM 直接启动守护进程并重定向输出
     echo 🚀 启动守护进程...
-    start /b "" cmd /c "%CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1"
+    REM 使用正确的命令格式启动
+    start /b "" cmd /c "cd /d \"%SCRIPT_DIR%\" && %CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1"
     
     REM 等待日志文件创建
     set count=0
@@ -138,8 +154,29 @@ goto show_help
     :log_created
     echo ✅ 日志文件已创建
     
-    REM 获取Python进程PID（简化方法）
+    REM 获取进程PID（改进方法）
     timeout /t 2 /nobreak >nul
+    
+    REM 使用wmic获取最新的python进程PID
+    for /f "tokens=2 delims=," %%i in ('wmic process where "name='python.exe' and commandline like '%%daemon%%'" get processid /format:csv 2^>nul ^| find ","') do (
+        set "new_pid=%%i"
+        if defined new_pid (
+            echo !new_pid! > "%PID_FILE%"
+            goto pid_found
+        )
+    )
+    
+    REM 备选方法：查找包含daemon的进程
+    for /f "tokens=1" %%i in ('wmic process where "commandline like '%%daemon%%'" get processid /value 2^>nul ^| find "ProcessId="') do (
+        set "pid_line=%%i"
+        set "new_pid=!pid_line:ProcessId=!"
+        if defined new_pid (
+            echo !new_pid! > "%PID_FILE%"
+            goto pid_found
+        )
+    )
+    
+    REM 最后尝试：简单的python进程查找
     for /f "tokens=2" %%i in ('tasklist /fi "imagename eq python.exe" /fo csv 2^>nul ^| find "python.exe" 2^>nul') do (
         set "new_pid=%%i"
         set "new_pid=!new_pid:"=!"
@@ -147,16 +184,8 @@ goto show_help
         goto pid_found
     )
     
-    REM 如果找不到python.exe，尝试查找uv进程
-    for /f "tokens=2" %%i in ('tasklist /fi "imagename eq uv.exe" /fo csv 2^>nul ^| find "uv.exe" 2^>nul') do (
-        set "new_pid=%%i"
-        set "new_pid=!new_pid:"=!"
-        echo !new_pid! > "%PID_FILE%"
-        goto pid_found
-    )
-    
-    echo ⚠️  无法获取准确的PID，但进程可能已启动
-    echo dummy_pid > "%PID_FILE%"
+    echo ⚠️  无法获取准确的PID，使用占位符
+    echo placeholder > "%PID_FILE%"
     
     :pid_found
     
