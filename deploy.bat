@@ -72,24 +72,24 @@ if not exist "%SCRIPT_DIR%\cli.py" (
 goto :eof
 
 :: ========================================
-:: 检查守护进程状态 (通过查找cli.py daemon进程)
+:: 检查守护进程状态 (通过PID文件)
 :: ========================================
 :check_daemon_status
 set "DAEMON_RUNNING=0"
 set "DAEMON_PID="
 
-:: 方法1: 通过WMIC查找包含 cli.py daemon 的Python进程
-for /f "tokens=2" %%i in ('wmic process where "commandline like '%%cli.py%%daemon%%'" get processid 2^>nul ^| findstr /r "[0-9]"') do (
-    set "DAEMON_PID=%%i"
-    set "DAEMON_RUNNING=1"
-)
+if not exist "%PID_FILE%" goto :eof
 
-:: 如果找到了进程，更新PID文件
-if "!DAEMON_RUNNING!"=="1" (
-    echo !DAEMON_PID!>"%PID_FILE%"
+set /p DAEMON_PID=<"%PID_FILE%"
+if "!DAEMON_PID!"=="" goto :eof
+
+:: 检查进程是否存在 (检查uv进程或其子进程)
+tasklist /FI "PID eq !DAEMON_PID!" 2>nul | find "!DAEMON_PID!" >nul
+if %errorlevel% equ 0 (
+    set "DAEMON_RUNNING=1"
 ) else (
-    :: 清理旧的PID文件
-    if exist "%PID_FILE%" del /f "%PID_FILE%" >nul 2>&1
+    :: PID文件存在但进程不存在，清理无效的PID文件
+    del /f "%PID_FILE%" >nul 2>&1
 )
 goto :eof
 
@@ -97,7 +97,13 @@ goto :eof
 :: 获取守护进程PID
 :: ========================================
 :get_daemon_pid
-if "!DAEMON_PID!"=="" set "DAEMON_PID=N/A"
+if "!DAEMON_PID!"=="" (
+    if exist "%PID_FILE%" (
+        set /p DAEMON_PID=<"%PID_FILE%"
+    ) else (
+        set "DAEMON_PID=N/A"
+    )
+)
 goto :eof
 
 :: ========================================
@@ -172,22 +178,11 @@ if "!DAEMON_RUNNING!"=="0" (
 call :get_daemon_pid
 echo [信息] 停止进程 PID: !DAEMON_PID!
 
-:: 终止进程及其子进程
+:: 终止进程及其子进程 (/T 终止进程树)
 taskkill /PID !DAEMON_PID! /T /F >nul 2>&1
 
 :: 等待进程结束
 timeout /t 2 /nobreak >nul
-
-:: 再次检查是否还有残留进程
-call :check_daemon_status
-if "!DAEMON_RUNNING!"=="1" (
-    echo [警告] 进程未正常结束，强制终止所有相关进程...
-    :: 终止所有包含 cli.py daemon 的进程
-    for /f "tokens=2" %%i in ('wmic process where "commandline like '%%cli.py%%daemon%%'" get processid 2^>nul ^| findstr /r "[0-9]"') do (
-        taskkill /PID %%i /T /F >nul 2>&1
-    )
-    timeout /t 1 /nobreak >nul
-)
 
 :stop_done
 :: 清理PID文件
@@ -411,10 +406,6 @@ call :get_daemon_pid
 echo [信息] 停止进程 PID: !DAEMON_PID!
 taskkill /PID !DAEMON_PID! /T /F >nul 2>&1
 timeout /t 2 /nobreak >nul
-:: 确保所有相关进程都被终止
-for /f "tokens=2" %%i in ('wmic process where "commandline like '%%cli.py%%daemon%%'" get processid 2^>nul ^| findstr /r "[0-9]"') do (
-    taskkill /PID %%i /T /F >nul 2>&1
-)
 del /f "%PID_FILE%" >nul 2>&1
 echo [成功] 守护进程已停止
 goto :eof
