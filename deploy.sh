@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_NAME="zerotier-auto-planet"
 PID_FILE="$SCRIPT_DIR/.daemon.pid"
-LOG_FILE="$SCRIPT_DIR/daemon.log"
+LOG_FILE="$SCRIPT_DIR/logs/daemon.log"
 CLI_COMMAND="uv run python cli.py"
 
 # 检查依赖
