@@ -574,37 +574,41 @@ class ServiceManager:
                     self.logger.debug(f"GUI程序不存在: {gui_path}")
                     continue
                     
-                # 启动GUI程序 - 处理路径中的空格
-                # 使用多种方法尝试启动GUI
+                # 启动GUI程序 - Windows需要先cd到目录再运行
+                gui_dir = str(Path(gui_path).parent)
+                gui_exe = Path(gui_path).name
                 success = False
                 
-                # 方法1: 直接启动（subprocess会自动处理空格）
+                # 方法1: 使用cd命令切换目录后启动
                 try:
-                    success, output = self._run_command([gui_path], timeout=10)
+                    success, output = self._run_command([
+                        "cmd", "/c", f'cd /d "{gui_dir}" && "{gui_exe}"'
+                    ], timeout=10)
                     if success:
-                        self.logger.debug(f"方法1成功启动GUI: {gui_path}")
+                        self.logger.debug(f"方法1成功启动GUI: cd到 {gui_dir} 后运行 {gui_exe}")
                 except Exception as e:
                     self.logger.debug(f"方法1启动失败: {e}")
                 
-                # 方法2: 使用cmd start命令（如果方法1失败）
+                # 方法2: 使用start命令在指定目录启动（如果方法1失败）
                 if not success:
                     try:
                         success, output = self._run_command([
-                            "cmd", "/c", "start", "/B", "", gui_path
+                            "cmd", "/c", f'cd /d "{gui_dir}" && start /B "" "{gui_exe}"'
                         ], timeout=10)
                         if success:
-                            self.logger.debug(f"方法2成功启动GUI: {gui_path}")
+                            self.logger.debug(f"方法2成功启动GUI: 在 {gui_dir} 目录使用start命令")
                     except Exception as e:
                         self.logger.debug(f"方法2启动失败: {e}")
                 
-                # 方法3: 使用带引号的路径（如果前两种都失败）
+                # 方法3: 使用PowerShell启动（如果前两种都失败）
                 if not success:
                     try:
                         success, output = self._run_command([
-                            "cmd", "/c", f'"{gui_path}"'
+                            "powershell", "-Command", 
+                            f'Set-Location "{gui_dir}"; Start-Process ".\\{gui_exe}" -WindowStyle Hidden'
                         ], timeout=10)
                         if success:
-                            self.logger.debug(f"方法3成功启动GUI: {gui_path}")
+                            self.logger.debug(f"方法3成功启动GUI: 使用PowerShell在 {gui_dir} 启动")
                     except Exception as e:
                         self.logger.debug(f"方法3启动失败: {e}")
                 
