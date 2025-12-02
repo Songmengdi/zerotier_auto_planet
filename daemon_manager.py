@@ -103,7 +103,23 @@ class DaemonManager:
         
         try:
             # 构建命令行参数
-            cmd = [sys.executable, "-m", "cli", "daemon", "--background"]
+            system = platform.system().lower()
+            
+            if system == "windows":
+                # Windows: 使用 pythonw.exe 避免显示控制台窗口
+                python_exe = sys.executable.replace("python.exe", "pythonw.exe")
+                if not os.path.exists(python_exe):
+                    # 如果 pythonw.exe 不存在，尝试在同目录查找
+                    python_dir = os.path.dirname(sys.executable)
+                    python_exe = os.path.join(python_dir, "pythonw.exe")
+                    if not os.path.exists(python_exe):
+                        # 最后使用原来的 python.exe
+                        python_exe = sys.executable
+                cmd = [python_exe, "-m", "cli", "daemon", "--background"]
+            else:
+                # Linux/macOS: 使用普通的 python
+                cmd = [sys.executable, "-m", "cli", "daemon", "--background"]
+            
             if interval:
                 cmd.extend(["--interval", str(interval)])
             
@@ -115,12 +131,26 @@ class DaemonManager:
             
             with open(self.config.daemon_log_file, 'a', encoding='utf-8') as log_file:
                 if system == "windows":
-                    # Windows: 使用 CREATE_NEW_PROCESS_GROUP 和 DETACHED_PROCESS
+                    # Windows: 使用多种标志确保窗口隐藏
+                    creation_flags = 0
+                    if hasattr(subprocess, 'CREATE_NEW_PROCESS_GROUP'):
+                        creation_flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+                    if hasattr(subprocess, 'DETACHED_PROCESS'):
+                        creation_flags |= subprocess.DETACHED_PROCESS
+                    if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                        creation_flags |= subprocess.CREATE_NO_WINDOW
+                    
+                    # 使用 STARTUPINFO 隐藏窗口
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = subprocess.SW_HIDE
+                    
                     process = subprocess.Popen(
                         cmd,
                         stdout=log_file,
                         stderr=subprocess.STDOUT,
-                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS if hasattr(subprocess, 'CREATE_NEW_PROCESS_GROUP') else 0,
+                        creationflags=creation_flags,
+                        startupinfo=startupinfo,
                         cwd=Path.cwd()
                     )
                 else:
