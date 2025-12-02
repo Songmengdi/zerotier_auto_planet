@@ -44,12 +44,12 @@ goto :show_help
 :: ========================================
 :print_banner
 echo.
-echo ╔══════════════════════════════════════════════════════════════╗
-echo ║                    ZeroTier Auto Planet                      ║
-echo ║                     部署管理工具 (Windows)                   ║
-echo ║                                                              ║
-echo ║  自动监控IP变动并更新ZeroTier Planet文件                    ║
-echo ╚══════════════════════════════════════════════════════════════╝
+echo ================================================================
+echo                     ZeroTier Auto Planet                      
+echo                    部署管理工具 [Windows]                   
+echo                                                              
+echo   自动监控IP变动并更新ZeroTier Planet文件                    
+echo ================================================================
 echo.
 goto :eof
 
@@ -125,7 +125,7 @@ cd /d "%SCRIPT_DIR%"
 echo [信息] 启动命令: %CLI_COMMAND% daemon
 
 :: 使用 PowerShell 在后台启动进程并获取PID
-for /f "tokens=*" %%i in ('powershell -Command "Start-Process -FilePath 'uv' -ArgumentList 'run python cli.py daemon' -WorkingDirectory '%SCRIPT_DIR%' -WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"') do set "NEW_PID=%%i"
+for /f "tokens=*" %%i in ('powershell -NoProfile -Command "$p = Start-Process -FilePath 'uv' -ArgumentList 'run','python','cli.py','daemon' -WorkingDirectory '%SCRIPT_DIR%' -WindowStyle Hidden -PassThru -RedirectStandardOutput '%LOG_FILE%' -RedirectStandardError '%LOG_FILE%.err'; $p.Id"') do set "NEW_PID=%%i"
 
 if "!NEW_PID!"=="" (
     echo [错误] 无法启动守护进程
@@ -386,7 +386,7 @@ if "!DAEMON_RUNNING!"=="1" (
 )
 if not exist "%SCRIPT_DIR%\logs" mkdir "%SCRIPT_DIR%\logs"
 cd /d "%SCRIPT_DIR%"
-for /f "tokens=*" %%i in ('powershell -Command "Start-Process -FilePath 'uv' -ArgumentList 'run python cli.py daemon' -WorkingDirectory '%SCRIPT_DIR%' -WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"') do set "NEW_PID=%%i"
+for /f "tokens=*" %%i in ('powershell -NoProfile -Command "$p = Start-Process -FilePath 'uv' -ArgumentList 'run','python','cli.py','daemon' -WorkingDirectory '%SCRIPT_DIR%' -WindowStyle Hidden -PassThru -RedirectStandardOutput '%LOG_FILE%' -RedirectStandardError '%LOG_FILE%.err'; $p.Id"') do set "NEW_PID=%%i"
 if "!NEW_PID!"=="" (
     echo [错误] 无法启动守护进程
     goto :eof

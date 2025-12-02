@@ -26,13 +26,13 @@ CLI_COMMAND="uv run python cli.py"
 # 检查依赖
 check_dependencies() {
     if ! command -v uv &> /dev/null; then
-        echo -e "${RED}❌ 错误: 未找到 uv 命令${NC}"
+        echo -e "${RED}错误: 未找到 uv 命令${NC}"
         echo -e "${YELLOW}请先安装 uv: curl -LsSf https://astral.sh/uv/install.sh | sh${NC}"
         exit 1
     fi
     
     if [ ! -f "$SCRIPT_DIR/cli.py" ]; then
-        echo -e "${RED}❌ 错误: 未找到 cli.py 文件${NC}"
+        echo -e "${RED}错误: 未找到 cli.py 文件${NC}"
         echo -e "${YELLOW}请确保在项目根目录运行此脚本${NC}"
         exit 1
     fi
@@ -76,10 +76,10 @@ get_daemon_pid() {
 
 # 启动守护进程
 start_daemon() {
-    echo -e "${BLUE}🚀 启动ZeroTier Auto Planet守护进程...${NC}"
+    echo -e "${BLUE}启动ZeroTier Auto Planet守护进程...${NC}"
     
     if check_daemon_status; then
-        echo -e "${YELLOW}⚠️  守护进程已在运行中 (PID: $(get_daemon_pid))${NC}"
+        echo -e "${YELLOW}守护进程已在运行中 (PID: $(get_daemon_pid))${NC}"
         return 0
     fi
     
@@ -87,7 +87,7 @@ start_daemon() {
     cd "$SCRIPT_DIR"
     
     # 启动守护进程
-    echo -e "${CYAN}📝 启动命令: $CLI_COMMAND daemon${NC}"
+    echo -e "${CYAN}启动命令: $CLI_COMMAND daemon${NC}"
     nohup $CLI_COMMAND daemon > "$LOG_FILE" 2>&1 &
     local daemon_pid=$!
     
@@ -98,17 +98,17 @@ start_daemon() {
     sleep 3
     
     if check_daemon_status; then
-        echo -e "${GREEN}✅ 守护进程启动成功!${NC}"
+        echo -e "${GREEN}守护进程启动成功!${NC}"
         echo -e "${WHITE}   PID: $(get_daemon_pid)${NC}"
         echo -e "${WHITE}   日志文件: $LOG_FILE${NC}"
         echo -e "${WHITE}   PID文件: $PID_FILE${NC}"
         echo ""
-        echo -e "${CYAN}💡 提示:${NC}"
+        echo -e "${CYAN}提示:${NC}"
         echo -e "   - 使用 ${WHITE}$0 status${NC} 查看状态"
         echo -e "   - 使用 ${WHITE}$0 stop${NC} 停止守护进程"
         echo -e "   - 使用 ${WHITE}tail -f $LOG_FILE${NC} 查看实时日志"
     else
-        echo -e "${RED}❌ 守护进程启动失败${NC}"
+        echo -e "${RED}守护进程启动失败${NC}"
         echo -e "${YELLOW}请检查日志文件: $LOG_FILE${NC}"
         return 1
     fi
@@ -116,15 +116,15 @@ start_daemon() {
 
 # 停止守护进程
 stop_daemon() {
-    echo -e "${BLUE}🛑 停止ZeroTier Auto Planet守护进程...${NC}"
+    echo -e "${BLUE}停止ZeroTier Auto Planet守护进程...${NC}"
     
     if ! check_daemon_status; then
-        echo -e "${YELLOW}⚠️  守护进程未运行${NC}"
+        echo -e "${YELLOW}守护进程未运行${NC}"
         return 0
     fi
     
     local pid=$(get_daemon_pid)
-    echo -e "${CYAN}📝 停止进程 PID: $pid${NC}"
+    echo -e "${CYAN}停止进程 PID: $pid${NC}"
     
     # 发送TERM信号
     kill -TERM "$pid" 2>/dev/null || true
@@ -137,12 +137,12 @@ stop_daemon() {
         fi
         sleep 1
         count=$((count + 1))
-        echo -e "${CYAN}⏳ 等待进程结束... ($count/10)${NC}"
+        echo -e "${CYAN}等待进程结束... ($count/10)${NC}"
     done
     
     # 如果还在运行，强制杀死
     if ps -p "$pid" > /dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  进程未正常结束，强制终止...${NC}"
+        echo -e "${YELLOW}进程未正常结束，强制终止...${NC}"
         kill -KILL "$pid" 2>/dev/null || true
         sleep 1
     fi
@@ -150,31 +150,31 @@ stop_daemon() {
     # 清理PID文件
     rm -f "$PID_FILE"
     
-    echo -e "${GREEN}✅ 守护进程已停止${NC}"
+    echo -e "${GREEN}守护进程已停止${NC}"
 }
 
 # 查看状态
 show_status() {
-    echo -e "${BLUE}📊 ZeroTier Auto Planet 状态${NC}"
+    echo -e "${BLUE}ZeroTier Auto Planet 状态${NC}"
     echo -e "${WHITE}========================================${NC}"
     
     # 守护进程状态
     if check_daemon_status; then
         local pid=$(get_daemon_pid)
         local uptime=$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ' || echo "N/A")
-        echo -e "${GREEN}🔄 守护进程: 运行中${NC}"
+        echo -e "${GREEN}守护进程: 运行中${NC}"
         echo -e "${WHITE}   PID: $pid${NC}"
         echo -e "${WHITE}   运行时间: $uptime${NC}"
         echo -e "${WHITE}   日志文件: $LOG_FILE${NC}"
     else
-        echo -e "${RED}🔄 守护进程: 未运行${NC}"
+        echo -e "${RED}守护进程: 未运行${NC}"
     fi
     
     echo ""
     
     # 项目状态
     cd "$SCRIPT_DIR"
-    echo -e "${CYAN}📋 项目状态:${NC}"
+    echo -e "${CYAN}项目状态:${NC}"
     $CLI_COMMAND status
     
     echo ""
@@ -183,27 +183,27 @@ show_status() {
     if [ -f "$LOG_FILE" ]; then
         local log_size=$(du -h "$LOG_FILE" | cut -f1)
         local log_lines=$(wc -l < "$LOG_FILE")
-        echo -e "${CYAN}📄 日志信息:${NC}"
+        echo -e "${CYAN}日志信息:${NC}"
         echo -e "${WHITE}   文件大小: $log_size${NC}"
         echo -e "${WHITE}   行数: $log_lines${NC}"
         echo -e "${WHITE}   最后10行:${NC}"
         echo -e "${PURPLE}$(tail -10 "$LOG_FILE" 2>/dev/null || echo "   无日志内容")${NC}"
     else
-        echo -e "${YELLOW}📄 日志文件: 不存在${NC}"
+        echo -e "${YELLOW}日志文件: 不存在${NC}"
     fi
 }
 
 # 强制更新
 force_update() {
-    echo -e "${BLUE}🔄 执行强制更新...${NC}"
+    echo -e "${BLUE}执行强制更新...${NC}"
     
     cd "$SCRIPT_DIR"
-    echo -e "${CYAN}📝 执行命令: $CLI_COMMAND force-update${NC}"
+    echo -e "${CYAN}执行命令: $CLI_COMMAND force-update${NC}"
     
     if $CLI_COMMAND force-update; then
-        echo -e "${GREEN}✅ 强制更新完成${NC}"
+        echo -e "${GREEN}强制更新完成${NC}"
     else
-        echo -e "${RED}❌ 强制更新失败${NC}"
+        echo -e "${RED}强制更新失败${NC}"
         return 1
     fi
 }
@@ -211,34 +211,34 @@ force_update() {
 # 显示菜单
 show_menu() {
     echo -e "${WHITE}请选择操作:${NC}"
-    echo -e "${CYAN}  1) 🚀 启动守护进程 (start)${NC}"
-    echo -e "${CYAN}  2) 🛑 停止守护进程 (stop)${NC}"
-    echo -e "${CYAN}  3) 📊 查看状态 (status)${NC}"
-    echo -e "${CYAN}  4) 🔄 强制更新 (force-update)${NC}"
-    echo -e "${CYAN}  5) 📄 查看实时日志${NC}"
-    echo -e "${CYAN}  6) 🧪 运行测试${NC}"
-    echo -e "${CYAN}  0) 🚪 退出${NC}"
+    echo -e "${CYAN}  1) 启动守护进程 (start)${NC}"
+    echo -e "${CYAN}  2) 停止守护进程 (stop)${NC}"
+    echo -e "${CYAN}  3) 查看状态 (status)${NC}"
+    echo -e "${CYAN}  4) 强制更新 (force-update)${NC}"
+    echo -e "${CYAN}  5) 查看实时日志${NC}"
+    echo -e "${CYAN}  6) 运行测试${NC}"
+    echo -e "${CYAN}  0) 退出${NC}"
     echo ""
 }
 
 # 查看实时日志
 show_logs() {
     if [ ! -f "$LOG_FILE" ]; then
-        echo -e "${YELLOW}⚠️  日志文件不存在: $LOG_FILE${NC}"
+        echo -e "${YELLOW}日志文件不存在: $LOG_FILE${NC}"
         return 1
     fi
     
-    echo -e "${BLUE}📄 实时日志 (按 Ctrl+C 退出):${NC}"
+    echo -e "${BLUE}实时日志 (按 Ctrl+C 退出):${NC}"
     echo -e "${PURPLE}========================================${NC}"
     tail -f "$LOG_FILE"
 }
 
 # 运行测试
 run_test() {
-    echo -e "${BLUE}🧪 运行系统测试...${NC}"
+    echo -e "${BLUE}运行系统测试...${NC}"
     
     cd "$SCRIPT_DIR"
-    echo -e "${CYAN}📝 执行命令: $CLI_COMMAND test${NC}"
+    echo -e "${CYAN}执行命令: $CLI_COMMAND test${NC}"
     
     $CLI_COMMAND test
 }
@@ -270,11 +270,11 @@ interactive_menu() {
                 run_test
                 ;;
             0)
-                echo -e "${GREEN}👋 再见!${NC}"
+                echo -e "${GREEN}再见!${NC}"
                 exit 0
                 ;;
             *)
-                echo -e "${RED}❌ 无效选项，请重新选择${NC}"
+                echo -e "${RED}无效选项，请重新选择${NC}"
                 ;;
         esac
         
@@ -339,7 +339,7 @@ main() {
             interactive_menu
             ;;
         *)
-            echo -e "${RED}❌ 未知命令: $1${NC}"
+            echo -e "${RED}未知命令: $1${NC}"
             echo ""
             show_help
             exit 1
@@ -348,7 +348,7 @@ main() {
 }
 
 # 信号处理
-trap 'echo -e "\n${YELLOW}⚠️  收到中断信号${NC}"; exit 0' INT TERM
+trap 'echo -e "\n${YELLOW}收到中断信号${NC}"; exit 0' INT TERM
 
 # 运行主函数
 main "$@"
