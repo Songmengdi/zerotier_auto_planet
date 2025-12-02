@@ -8,6 +8,7 @@ from app import ZeroTierAutoApp
 from config import get_config
 from constants import APP_NAME, APP_VERSION
 from utils import ensure_admin_privileges, check_zerotier_installed, check_windows_admin_privileges
+from daemon_manager import DaemonManager
 import platform
 
 
@@ -85,8 +86,9 @@ def check(ctx):
 @cli.command()
 @require_admin
 @click.option('--interval', '-i', type=int, help='检查间隔（秒）')
+@click.option('--background', is_flag=True, help='后台运行模式（内部使用）')
 @click.pass_context
-def daemon(ctx, interval):
+def daemon(ctx, interval, background):
     """以守护进程模式运行"""
     try:
         config = get_config()
@@ -102,17 +104,35 @@ def daemon(ctx, interval):
             click.echo("前提条件检查失败", err=True)
             sys.exit(1)
         
-        click.echo(f"启动守护进程模式，检查间隔: {config.check_interval}秒")
-        click.echo("按 Ctrl+C 停止")
+        # 如果是后台模式，写入 PID 文件
+        if background:
+            import os
+            config.daemon_pid_file.write_text(str(os.getpid()))
+            click.echo(f"后台守护进程启动，PID: {os.getpid()}")
+            click.echo(f"检查间隔: {config.check_interval}秒")
+        else:
+            click.echo(f"启动守护进程模式，检查间隔: {config.check_interval}秒")
+            click.echo("按 Ctrl+C 停止")
         
         # 运行守护进程
         app.run_daemon()
         app.cleanup()
         
+        # 清理 PID 文件
+        if background and config.daemon_pid_file.exists():
+            config.daemon_pid_file.unlink()
+        
     except KeyboardInterrupt:
-        click.echo("\n用户中断，程序退出")
+        if not background:
+            click.echo("\n用户中断，程序退出")
+        # 清理 PID 文件
+        if background and config.daemon_pid_file.exists():
+            config.daemon_pid_file.unlink()
     except Exception as e:
         click.echo(f"守护进程运行失败: {e}", err=True)
+        # 清理 PID 文件
+        if background and config.daemon_pid_file.exists():
+            config.daemon_pid_file.unlink()
         sys.exit(1)
 
 
@@ -279,6 +299,113 @@ log_level: "INFO"    # 日志级别: DEBUG, INFO, WARNING, ERROR, CRITICAL
         
     except Exception as e:
         click.echo(f"生成配置文件失败: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@require_admin
+@click.option('--interval', '-i', type=int, help='检查间隔（秒）')
+@click.pass_context
+def start(ctx, interval):
+    """启动后台IP检测守护进程"""
+    try:
+        config = get_config()
+        daemon_manager = DaemonManager(config)
+        
+        # 检查是否已经在运行
+        if daemon_manager.is_running():
+            click.echo("守护进程已在运行")
+            pid = daemon_manager.get_pid()
+            if pid:
+                click.echo(f"PID: {pid}")
+            sys.exit(0)
+        
+        # 启动守护进程
+        click.echo("启动后台IP检测守护进程...")
+        if daemon_manager.start_daemon(interval):
+            pid = daemon_manager.get_pid()
+            click.echo(f"✅ 守护进程启动成功，PID: {pid}")
+            click.echo(f"日志文件: {config.daemon_log_file}")
+            click.echo("使用 'uv run cli.py stop' 停止守护进程")
+        else:
+            click.echo("❌ 守护进程启动失败", err=True)
+            sys.exit(1)
+        
+    except Exception as e:
+        click.echo(f"启动守护进程失败: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@require_admin
+@click.pass_context
+def stop(ctx):
+    """停止后台IP检测守护进程"""
+    try:
+        config = get_config()
+        daemon_manager = DaemonManager(config)
+        
+        # 检查是否在运行
+        if not daemon_manager.is_running():
+            click.echo("守护进程未运行")
+            sys.exit(0)
+        
+        # 停止守护进程
+        pid = daemon_manager.get_pid()
+        click.echo(f"停止守护进程 (PID: {pid})...")
+        
+        if daemon_manager.stop_daemon():
+            click.echo("✅ 守护进程已停止")
+        else:
+            click.echo("❌ 停止守护进程失败", err=True)
+            sys.exit(1)
+        
+    except Exception as e:
+        click.echo(f"停止守护进程失败: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.pass_context
+def daemon_status(ctx):
+    """显示守护进程状态"""
+    try:
+        config = get_config()
+        daemon_manager = DaemonManager(config)
+        
+        status = daemon_manager.get_status()
+        
+        click.echo("守护进程状态")
+        click.echo("=" * 40)
+        
+        if status["running"]:
+            click.echo(f"状态: 运行中")
+            click.echo(f"PID: {status['pid']}")
+            
+            # 显示详细信息（如果可用）
+            if "start_time" in status:
+                import datetime
+                start_time = datetime.datetime.fromtimestamp(status["start_time"])
+                click.echo(f"启动时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            if "memory_info" in status:
+                memory_mb = status["memory_info"]["rss"] / 1024 / 1024
+                click.echo(f"内存使用: {memory_mb:.1f} MB")
+        else:
+            click.echo("状态: 未运行")
+        
+        click.echo(f"PID文件: {status['pid_file']}")
+        click.echo(f"日志文件: {status['log_file']}")
+        
+        # 显示日志文件是否存在
+        if Path(status['log_file']).exists():
+            log_size = Path(status['log_file']).stat().st_size
+            click.echo(f"日志大小: {log_size} bytes")
+        else:
+            click.echo("日志文件: 不存在")
+        
+    except Exception as e:
+        click.echo(f"获取守护进程状态失败: {e}", err=True)
         sys.exit(1)
 
 

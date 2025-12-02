@@ -51,6 +51,10 @@ class Config:
     cache_dir: Path = Path("./cache")
     local_ips_file: Path = Path("./ips")
     
+    # 守护进程配置
+    daemon_pid_file: Path = Path("./logs/daemon.lock")
+    daemon_log_file: Path = Path("./logs/daemon.log")
+    
     # 监控配置
     check_interval: int = 300  # 5分钟检查一次
     download_timeout: int = 30  # 下载超时时间
@@ -58,8 +62,9 @@ class Config:
     
     def __post_init__(self):
         """初始化后处理"""
-        # 确保缓存目录存在
+        # 确保必要目录存在
         self.cache_dir.mkdir(exist_ok=True)
+        Path("./logs").mkdir(exist_ok=True)
 
 
 def get_config() -> Config:
