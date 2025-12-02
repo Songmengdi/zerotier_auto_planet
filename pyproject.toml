@@ -1,0 +1,45 @@
+[project]
+name = "zerotier-auto-planet"
+version = "0.1.0"
+description = "ZeroTier自动Planet文件替换工具"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "click>=8.1.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+zerotier-auto-planet = "main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["main", "config", "downloader", "ip_monitor", "file_manager", "service_manager", "app", "cli", "logger", "constants", "exceptions", "utils"]
+
+[tool.setuptools.package-data]
+"*" = ["*.sh", "*.md"]
+
+[tool.uv]
+package = true
