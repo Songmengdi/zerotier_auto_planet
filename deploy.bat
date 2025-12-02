@@ -137,8 +137,8 @@ goto show_help
     
     REM 直接启动守护进程并重定向输出
     echo 🚀 启动守护进程...
-    REM 使用正确的命令格式启动
-    start /b "" cmd /c "cd /d \"%SCRIPT_DIR%\" && %CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1"
+    REM 使用正确的命令格式启动，添加输入重定向避免等待用户输入
+    start /b "" cmd /c "cd /d \"%SCRIPT_DIR%\" && echo. | %CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1"
     
     REM 等待日志文件创建
     set count=0

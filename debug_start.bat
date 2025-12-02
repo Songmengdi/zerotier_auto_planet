@@ -39,7 +39,8 @@ echo ✅ daemon命令测试完成
 REM 测试后台启动
 echo.
 echo 🚀 测试后台启动...
-start /b "" cmd /c "cd /d \"%SCRIPT_DIR%\" && %CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1"
+echo 📝 使用修复后的命令（添加输入重定向）
+start /b "" cmd /c "cd /d \"%SCRIPT_DIR%\" && echo. | %CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1"
 
 REM 等待日志文件
 echo ⏳ 等待日志文件创建...

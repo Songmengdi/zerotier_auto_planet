@@ -150,7 +150,7 @@ function Start-Daemon {
         # 方法1: 使用简单的后台进程启动
         Write-Host "🚀 启动守护进程..." -ForegroundColor $Colors.Cyan
         
-        $startCommand = "cd /d `"$ScriptDir`" && $CliCommand daemon > `"$LogFile`" 2>&1"
+        $startCommand = "cd /d `"$ScriptDir`" && echo. | $CliCommand daemon > `"$LogFile`" 2>&1"
         Write-Host "   启动命令: $startCommand" -ForegroundColor $Colors.White
         Write-Host "   工作目录: $ScriptDir" -ForegroundColor $Colors.White
         Write-Host "   日志文件: $LogFile" -ForegroundColor $Colors.White
@@ -209,7 +209,7 @@ function Start-Daemon {
         Write-Host "🔄 尝试备用启动方法..." -ForegroundColor $Colors.Yellow
         try {
             Write-Host "   使用PowerShell直接启动..." -ForegroundColor $Colors.Cyan
-            $process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Set-Location '$ScriptDir'; & $CliCommand daemon" -WindowStyle Hidden -PassThru -RedirectStandardOutput $LogFile -RedirectStandardError $LogFile
+            $process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Set-Location '$ScriptDir'; Write-Output '' | & $CliCommand daemon" -WindowStyle Hidden -PassThru -RedirectStandardOutput $LogFile -RedirectStandardError $LogFile
             $process.Id | Out-File $PidFile -Encoding ASCII
             Write-Host "   备用进程已启动，PID: $($process.Id)" -ForegroundColor $Colors.Green
             
