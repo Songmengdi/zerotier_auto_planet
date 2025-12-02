@@ -563,8 +563,8 @@ class ServiceManager:
             
             # 尝试不同的安装路径
             gui_paths = [
-                r"C:\Program Files (x86)\ZeroTier\One\ZeroTier One.exe",
-                r"C:\Program Files\ZeroTier\One\ZeroTier One.exe"
+                r"C:\Program Files (x86)\ZeroTier\One\zerotier_desktop_ui.exe",
+                r"C:\Program Files\ZeroTier\One\zerotier_desktop_ui.exe"
             ]
             
             gui_started = False
@@ -574,9 +574,9 @@ class ServiceManager:
                     self.logger.debug(f"GUI程序不存在: {gui_path}")
                     continue
                     
-                # Windows的start命令需要通过cmd执行，使用正确的路径格式
+                # 直接启动GUI程序
                 success, output = self._run_command([
-                    "cmd", "/c", "start", "", gui_path
+                    gui_path
                 ], timeout=10)
                 
                 if success:
@@ -715,6 +715,7 @@ class ServiceManager:
         elif self.platform == "windows":  # Windows
             return [
                 "zerotier-cli",
+                r"C:\ProgramData\ZeroTier\One\zerotier-one_x64.exe",
                 r"C:\Program Files (x86)\ZeroTier\One\zerotier-cli.exe",
                 r"C:\Program Files\ZeroTier\One\zerotier-cli.exe"
             ]
@@ -734,7 +735,14 @@ class ServiceManager:
             
             for cli_path in cli_paths:
                 try:
-                    success, output = self._run_command([cli_path, "peers"])
+                    # 根据CLI路径选择不同的命令格式
+                    if "zerotier-one_x64.exe" in cli_path:
+                        # 使用 zerotier-one_x64.exe -q peers 格式
+                        success, output = self._run_command([cli_path, "-q", "peers"])
+                    else:
+                        # 使用传统的 zerotier-cli peers 格式
+                        success, output = self._run_command([cli_path, "peers"])
+                    
                     if success:
                         has_planet = "PLANET" in output.upper()
                         self.logger.info(f"ZeroTier peers检查: {'发现PLANET角色' if has_planet else '未发现PLANET角色'}")
