@@ -110,8 +110,55 @@ goto show_help
     REM 启动守护进程
     echo 📝 启动命令: %CLI_COMMAND% daemon
     
-    REM 使用PowerShell启动并获取PID
-    powershell -Command "& { $process = Start-Process -FilePath 'cmd' -ArgumentList '/c', '%CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1' -WindowStyle Hidden -PassThru; $process.Id | Out-File '%PID_FILE%' -Encoding ASCII; Write-Host 'Process started with PID:' $process.Id }"
+    REM 测试CLI命令是否可用
+    echo 🔍 测试CLI命令...
+    %CLI_COMMAND% --help >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo ❌ CLI命令不可用，请检查uv和Python环境
+        echo 💡 尝试手动运行: %CLI_COMMAND% --help
+        goto end
+    )
+    echo ✅ CLI命令可用
+    
+    REM 直接启动守护进程并重定向输出
+    echo 🚀 启动守护进程...
+    start /b "" cmd /c "%CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1"
+    
+    REM 等待日志文件创建
+    set count=0
+    :wait_log
+    if exist "%LOG_FILE%" goto log_created
+    timeout /t 1 /nobreak >nul
+    set /a count+=1
+    if %count% lss 10 goto wait_log
+    
+    echo ❌ 日志文件未创建，守护进程可能启动失败
+    goto end
+    
+    :log_created
+    echo ✅ 日志文件已创建
+    
+    REM 获取Python进程PID（简化方法）
+    timeout /t 2 /nobreak >nul
+    for /f "tokens=2" %%i in ('tasklist /fi "imagename eq python.exe" /fo csv 2^>nul ^| find "python.exe" 2^>nul') do (
+        set "new_pid=%%i"
+        set "new_pid=!new_pid:"=!"
+        echo !new_pid! > "%PID_FILE%"
+        goto pid_found
+    )
+    
+    REM 如果找不到python.exe，尝试查找uv进程
+    for /f "tokens=2" %%i in ('tasklist /fi "imagename eq uv.exe" /fo csv 2^>nul ^| find "uv.exe" 2^>nul') do (
+        set "new_pid=%%i"
+        set "new_pid=!new_pid:"=!"
+        echo !new_pid! > "%PID_FILE%"
+        goto pid_found
+    )
+    
+    echo ⚠️  无法获取准确的PID，但进程可能已启动
+    echo dummy_pid > "%PID_FILE%"
+    
+    :pid_found
     
     REM 等待进程启动
     timeout /t 3 /nobreak >nul
