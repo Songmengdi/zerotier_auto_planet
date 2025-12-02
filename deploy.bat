@@ -109,21 +109,19 @@ goto show_help
     
     REM 启动守护进程
     echo 📝 启动命令: %CLI_COMMAND% daemon
-    start /b "" %CLI_COMMAND% daemon > "%LOG_FILE%" 2>&1
     
-    REM 获取新进程PID (Windows批处理中获取PID比较复杂，这里使用简化方法)
+    REM 使用PowerShell启动并获取PID
+    powershell -Command "& { $process = Start-Process -FilePath 'cmd' -ArgumentList '/c', '%CLI_COMMAND% daemon > \"%LOG_FILE%\" 2>&1' -WindowStyle Hidden -PassThru; $process.Id | Out-File '%PID_FILE%' -Encoding ASCII; Write-Host 'Process started with PID:' $process.Id }"
+    
+    REM 等待进程启动
     timeout /t 3 /nobreak >nul
     
-    REM 通过进程名查找PID
-    for /f "tokens=2" %%i in ('tasklist /fi "imagename eq python.exe" /fo csv ^| find "python.exe"') do (
-        set "new_pid=%%i"
-        set "new_pid=!new_pid:"=!"
-    )
-    
-    if defined new_pid (
-        echo !new_pid! > "%PID_FILE%"
+    REM 检查是否启动成功
+    call :check_daemon_status
+    if %errorlevel% equ 0 (
+        call :get_daemon_pid
         echo ✅ 守护进程启动成功!
-        echo    PID: !new_pid!
+        echo    PID: !daemon_pid!
         echo    日志文件: %LOG_FILE%
         echo    PID文件: %PID_FILE%
         echo.
@@ -134,6 +132,10 @@ goto show_help
     ) else (
         echo ❌ 守护进程启动失败
         echo 💡 请检查日志文件: %LOG_FILE%
+        if exist "%LOG_FILE%" (
+            echo 💡 最后几行日志:
+            powershell -Command "Get-Content '%LOG_FILE%' | Select-Object -Last 5"
+        )
     )
     goto end
 

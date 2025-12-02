@@ -69,9 +69,23 @@ function Test-DaemonStatus {
     }
     
     try {
-        $pid = Get-Content $PidFile -ErrorAction Stop
-        $process = Get-Process -Id $pid -ErrorAction Stop
-        return $true
+        $jobId = Get-Content $PidFile -ErrorAction Stop
+        
+        # 检查PowerShell作业状态
+        $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
+        if ($job -and $job.State -eq "Running") {
+            return $true
+        }
+        
+        # 如果作业不存在，尝试作为进程ID检查
+        $process = Get-Process -Id $jobId -ErrorAction SilentlyContinue
+        if ($process) {
+            return $true
+        }
+        
+        # 都不存在，清理PID文件
+        Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+        return $false
     }
     catch {
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
@@ -109,15 +123,29 @@ function Start-Daemon {
     Write-Host "📝 启动命令: $CliCommand daemon" -ForegroundColor $Colors.Cyan
     
     try {
-        $process = Start-Process -FilePath "cmd" -ArgumentList "/c", "$CliCommand daemon > `"$LogFile`" 2>&1" -WindowStyle Hidden -PassThru
-        $process.Id | Out-File $PidFile -Encoding ASCII
+        # 方法1: 使用PowerShell后台作业启动
+        Write-Host "🔄 尝试启动守护进程..." -ForegroundColor $Colors.Cyan
         
-        # 等待确认启动
-        Start-Sleep -Seconds 3
+        # 创建启动脚本
+        $startScript = @"
+Set-Location '$ScriptDir'
+& $CliCommand daemon *> '$LogFile'
+"@
         
-        if (Test-DaemonStatus) {
+        # 启动后台作业
+        $job = Start-Job -ScriptBlock {
+            param($script, $logFile)
+            Invoke-Expression $script
+        } -ArgumentList $startScript, $LogFile
+        
+        # 等待作业启动
+        Start-Sleep -Seconds 2
+        
+        # 获取作业进程ID
+        if ($job.State -eq "Running") {
+            $job.Id | Out-File $PidFile -Encoding ASCII
             Write-Host "✅ 守护进程启动成功!" -ForegroundColor $Colors.Green
-            Write-Host "   PID: $($process.Id)" -ForegroundColor $Colors.White
+            Write-Host "   作业ID: $($job.Id)" -ForegroundColor $Colors.White
             Write-Host "   日志文件: $LogFile" -ForegroundColor $Colors.White
             Write-Host "   PID文件: $PidFile" -ForegroundColor $Colors.White
             Write-Host ""
@@ -128,11 +156,34 @@ function Start-Daemon {
         }
         else {
             Write-Host "❌ 守护进程启动失败" -ForegroundColor $Colors.Red
-            Write-Host "💡 请检查日志文件: $LogFile" -ForegroundColor $Colors.Yellow
+            Write-Host "💡 作业状态: $($job.State)" -ForegroundColor $Colors.Yellow
+            if (Test-Path $LogFile) {
+                Write-Host "💡 日志内容:" -ForegroundColor $Colors.Yellow
+                Get-Content $LogFile -Tail 10 | ForEach-Object { Write-Host "   $_" -ForegroundColor $Colors.Red }
+            }
         }
     }
     catch {
         Write-Host "❌ 启动守护进程时出错: $($_.Exception.Message)" -ForegroundColor $Colors.Red
+        
+        # 备用方法: 直接使用cmd启动
+        Write-Host "🔄 尝试备用启动方法..." -ForegroundColor $Colors.Yellow
+        try {
+            $process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Set-Location '$ScriptDir'; & $CliCommand daemon" -WindowStyle Hidden -PassThru -RedirectStandardOutput $LogFile -RedirectStandardError $LogFile
+            $process.Id | Out-File $PidFile -Encoding ASCII
+            
+            Start-Sleep -Seconds 3
+            if (Test-DaemonStatus) {
+                Write-Host "✅ 备用方法启动成功!" -ForegroundColor $Colors.Green
+                Write-Host "   PID: $($process.Id)" -ForegroundColor $Colors.White
+            }
+            else {
+                Write-Host "❌ 备用方法也失败了" -ForegroundColor $Colors.Red
+            }
+        }
+        catch {
+            Write-Host "❌ 备用方法也失败: $($_.Exception.Message)" -ForegroundColor $Colors.Red
+        }
     }
 }
 
@@ -145,24 +196,42 @@ function Stop-Daemon {
         return
     }
     
-    $pid = Get-DaemonPid
-    Write-Host "📝 停止进程 PID: $pid" -ForegroundColor $Colors.Cyan
+    $jobId = Get-DaemonPid
+    Write-Host "📝 停止作业/进程 ID: $jobId" -ForegroundColor $Colors.Cyan
     
     try {
-        # 尝试优雅停止
-        Stop-Process -Id $pid -Force -ErrorAction Stop
-        
-        # 等待进程结束
-        $count = 0
-        while ($count -lt 10) {
-            try {
-                Get-Process -Id $pid -ErrorAction Stop | Out-Null
-                Start-Sleep -Seconds 1
-                $count++
-                Write-Host "⏳ 等待进程结束... ($count/10)" -ForegroundColor $Colors.Cyan
+        # 尝试停止PowerShell作业
+        $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
+        if ($job) {
+            Write-Host "🔄 停止PowerShell作业..." -ForegroundColor $Colors.Cyan
+            Stop-Job -Id $jobId -ErrorAction SilentlyContinue
+            Remove-Job -Id $jobId -Force -ErrorAction SilentlyContinue
+            Write-Host "✅ PowerShell作业已停止" -ForegroundColor $Colors.Green
+        }
+        else {
+            # 尝试作为进程停止
+            Write-Host "🔄 尝试停止进程..." -ForegroundColor $Colors.Cyan
+            $process = Get-Process -Id $jobId -ErrorAction SilentlyContinue
+            if ($process) {
+                Stop-Process -Id $jobId -Force -ErrorAction Stop
+                
+                # 等待进程结束
+                $count = 0
+                while ($count -lt 10) {
+                    try {
+                        Get-Process -Id $jobId -ErrorAction Stop | Out-Null
+                        Start-Sleep -Seconds 1
+                        $count++
+                        Write-Host "⏳ 等待进程结束... ($count/10)" -ForegroundColor $Colors.Cyan
+                    }
+                    catch {
+                        break
+                    }
+                }
+                Write-Host "✅ 进程已停止" -ForegroundColor $Colors.Green
             }
-            catch {
-                break
+            else {
+                Write-Host "⚠️  未找到运行的作业或进程" -ForegroundColor $Colors.Yellow
             }
         }
         
@@ -172,6 +241,8 @@ function Stop-Daemon {
     }
     catch {
         Write-Host "❌ 停止进程时出错: $($_.Exception.Message)" -ForegroundColor $Colors.Red
+        # 强制清理PID文件
+        Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     }
 }
 
