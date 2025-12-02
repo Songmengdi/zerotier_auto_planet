@@ -16,3 +16,5 @@ ips
 
 # Deployment files
 .daemon.pid
+debug_daemon.log
+test_simple.log
