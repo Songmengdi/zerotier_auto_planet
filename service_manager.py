@@ -574,10 +574,39 @@ class ServiceManager:
                     self.logger.debug(f"GUI程序不存在: {gui_path}")
                     continue
                     
-                # 直接启动GUI程序
-                success, output = self._run_command([
-                    gui_path
-                ], timeout=10)
+                # 启动GUI程序 - 处理路径中的空格
+                # 使用多种方法尝试启动GUI
+                success = False
+                
+                # 方法1: 直接启动（subprocess会自动处理空格）
+                try:
+                    success, output = self._run_command([gui_path], timeout=10)
+                    if success:
+                        self.logger.debug(f"方法1成功启动GUI: {gui_path}")
+                except Exception as e:
+                    self.logger.debug(f"方法1启动失败: {e}")
+                
+                # 方法2: 使用cmd start命令（如果方法1失败）
+                if not success:
+                    try:
+                        success, output = self._run_command([
+                            "cmd", "/c", "start", "/B", "", gui_path
+                        ], timeout=10)
+                        if success:
+                            self.logger.debug(f"方法2成功启动GUI: {gui_path}")
+                    except Exception as e:
+                        self.logger.debug(f"方法2启动失败: {e}")
+                
+                # 方法3: 使用带引号的路径（如果前两种都失败）
+                if not success:
+                    try:
+                        success, output = self._run_command([
+                            "cmd", "/c", f'"{gui_path}"'
+                        ], timeout=10)
+                        if success:
+                            self.logger.debug(f"方法3成功启动GUI: {gui_path}")
+                    except Exception as e:
+                        self.logger.debug(f"方法3启动失败: {e}")
                 
                 if success:
                     self.logger.info(f"GUI应用启动命令执行成功: {gui_path}")

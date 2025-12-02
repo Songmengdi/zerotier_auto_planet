@@ -13,3 +13,6 @@ logs/
 cache/
 daemon.log
 ips
+
+# Deployment files
+.daemon.pid
