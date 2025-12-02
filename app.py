@@ -90,7 +90,7 @@ class ZeroTierAutoApp(LoggerMixin):
     
     def update_planet_file(self) -> bool:
         """
-        更新planet文件 - 针对macOS优化的流程
+        更新planet文件 - 跨平台支持
         
         Returns:
             bool: 更新是否成功
@@ -106,10 +106,25 @@ class ZeroTierAutoApp(LoggerMixin):
             if not self.file_manager.verify_file_integrity(new_planet_path):
                 raise FileOperationError("下载的planet文件验证失败")
             
-            # 步骤2: 关闭ZeroTier应用和服务
+            # 步骤2: 关闭ZeroTier应用和服务（使用跨平台方法）
             self.logger.info("2. 关闭ZeroTier应用和服务...")
-            if not self.service_manager._stop_zerotier_macos():
-                self.logger.warning("停止ZeroTier服务失败，但继续执行")
+            try:
+                # 使用service_manager的restart方法来停止服务
+                # 这里我们只需要停止部分，所以直接调用平台特定的停止方法
+                import platform
+                system = platform.system().lower()
+                
+                if system == "darwin":  # macOS
+                    if not self.service_manager._stop_zerotier_macos():
+                        self.logger.warning("停止ZeroTier服务失败，但继续执行")
+                elif system == "windows":  # Windows
+                    if not self.service_manager._stop_zerotier_windows():
+                        self.logger.warning("停止ZeroTier服务失败，但继续执行")
+                else:
+                    self.logger.warning(f"不支持的平台: {system}")
+                    
+            except Exception as e:
+                self.logger.warning(f"停止ZeroTier服务时出错: {e}，但继续执行")
             
             # 等待完全停止
             time.sleep(3)
@@ -118,10 +133,23 @@ class ZeroTierAutoApp(LoggerMixin):
             self.logger.info("3. 替换planet文件...")
             self.file_manager.replace_planet_file(new_planet_path)
             
-            # 步骤4: 启动ZeroTier服务
+            # 步骤4: 启动ZeroTier服务（使用跨平台方法）
             self.logger.info("4. 启动ZeroTier服务...")
-            if not self.service_manager._start_zerotier_macos():
-                raise ServiceError("启动ZeroTier服务失败")
+            try:
+                import platform
+                system = platform.system().lower()
+                
+                if system == "darwin":  # macOS
+                    if not self.service_manager._start_zerotier_macos():
+                        raise ServiceError("启动ZeroTier服务失败")
+                elif system == "windows":  # Windows
+                    if not self.service_manager._start_zerotier_windows():
+                        raise ServiceError("启动ZeroTier服务失败")
+                else:
+                    raise ServiceError(f"不支持的平台: {system}")
+                    
+            except Exception as e:
+                raise ServiceError(f"启动ZeroTier服务失败: {e}")
             
             # 步骤5: 等待服务完全启动
             self.logger.info("5. 等待服务启动...")
@@ -147,12 +175,18 @@ class ZeroTierAutoApp(LoggerMixin):
             else:
                 self.logger.warning("⚠️  Planet文件更新完成，但未检测到PLANET角色")
             
-            # 步骤8: 启动ZeroTier GUI客户端
-            self.logger.info("8. 启动ZeroTier GUI客户端...")
-            if self.service_manager._start_zerotier_gui_macos():
-                self.logger.info("✅ ZeroTier GUI客户端启动成功")
+            # 步骤8: 启动ZeroTier GUI客户端（仅macOS需要单独启动GUI）
+            import platform
+            system = platform.system().lower()
+            if system == "darwin":  # macOS需要单独启动GUI
+                self.logger.info("8. 启动ZeroTier GUI客户端...")
+                if self.service_manager._start_zerotier_gui_macos():
+                    self.logger.info("✅ ZeroTier GUI客户端启动成功")
+                else:
+                    self.logger.warning("⚠️  ZeroTier GUI客户端启动失败，但服务正常运行")
             else:
-                self.logger.warning("⚠️  ZeroTier GUI客户端启动失败，但服务正常运行")
+                # Windows的GUI已经在_start_zerotier_windows中启动了
+                self.logger.info("8. ZeroTier GUI客户端已随服务启动")
             
             # 清理旧备份
             self.file_manager.cleanup_old_backups()

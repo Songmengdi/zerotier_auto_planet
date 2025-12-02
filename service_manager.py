@@ -569,8 +569,9 @@ class ServiceManager:
             
             gui_started = False
             for gui_path in gui_paths:
+                # Windows的start命令需要通过cmd执行
                 success, output = self._run_command([
-                    "start", "", f'"{gui_path}"'
+                    "cmd", "/c", "start", "", f'"{gui_path}"'
                 ], timeout=10)
                 
                 if success:
