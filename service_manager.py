@@ -569,9 +569,14 @@ class ServiceManager:
             
             gui_started = False
             for gui_path in gui_paths:
-                # Windows的start命令需要通过cmd执行
+                # 检查GUI程序是否存在
+                if not Path(gui_path).exists():
+                    self.logger.debug(f"GUI程序不存在: {gui_path}")
+                    continue
+                    
+                # Windows的start命令需要通过cmd执行，使用正确的路径格式
                 success, output = self._run_command([
-                    "cmd", "/c", "start", "", f'"{gui_path}"'
+                    "cmd", "/c", "start", "", gui_path
                 ], timeout=10)
                 
                 if success:
@@ -694,6 +699,28 @@ class ServiceManager:
             self.logger.error(f"检查ZeroTier服务状态失败: {e}")
             return False
     
+    def _get_zerotier_cli_paths(self) -> list[str]:
+        """
+        获取不同平台的zerotier-cli可能路径
+        
+        Returns:
+            list[str]: 可能的CLI路径列表
+        """
+        if self.platform == "darwin":  # macOS
+            return [
+                "zerotier-cli",
+                "/usr/local/bin/zerotier-cli",
+                "/opt/homebrew/bin/zerotier-cli"
+            ]
+        elif self.platform == "windows":  # Windows
+            return [
+                "zerotier-cli",
+                r"C:\Program Files (x86)\ZeroTier\One\zerotier-cli.exe",
+                r"C:\Program Files\ZeroTier\One\zerotier-cli.exe"
+            ]
+        else:
+            return ["zerotier-cli"]
+    
     def verify_zerotier_peers(self) -> bool:
         """
         验证ZeroTier连接状态
@@ -702,14 +729,24 @@ class ServiceManager:
             bool: 是否能看到PLANET角色
         """
         try:
-            success, output = self._run_command(["zerotier-cli", "peers"])
-            if success:
-                has_planet = "PLANET" in output.upper()
-                self.logger.info(f"ZeroTier peers检查: {'发现PLANET角色' if has_planet else '未发现PLANET角色'}")
-                return has_planet
-            else:
-                self.logger.error(f"执行zerotier-cli peers失败: {output}")
-                return False
+            # 尝试不同的zerotier-cli路径
+            cli_paths = self._get_zerotier_cli_paths()
+            
+            for cli_path in cli_paths:
+                try:
+                    success, output = self._run_command([cli_path, "peers"])
+                    if success:
+                        has_planet = "PLANET" in output.upper()
+                        self.logger.info(f"ZeroTier peers检查: {'发现PLANET角色' if has_planet else '未发现PLANET角色'}")
+                        return has_planet
+                    else:
+                        self.logger.debug(f"使用{cli_path}执行peers失败: {output}")
+                except Exception as e:
+                    self.logger.debug(f"尝试{cli_path}失败: {e}")
+                    continue
+            
+            self.logger.error("所有zerotier-cli路径都失败了")
+            return False
                 
         except Exception as e:
             self.logger.error(f"验证ZeroTier peers失败: {e}")
