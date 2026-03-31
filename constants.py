@@ -24,3 +24,6 @@ DEFAULT_CHECK_INTERVAL = 300
 
 # 服务名称
 ZEROTIER_SERVICE_NAME = "ZeroTier One"
+
+# Linux 平台
+PLATFORM_LINUX = "linux"

@@ -9,7 +9,7 @@ import logging
 
 from config import Config
 from exceptions import FileOperationError, PermissionError as CustomPermissionError, PlatformNotSupportedError
-from constants import PLATFORM_MACOS, PLATFORM_WINDOWS
+from constants import PLATFORM_MACOS, PLATFORM_WINDOWS, PLATFORM_LINUX
 
 
 class FileManager:
@@ -103,20 +103,20 @@ class FileManager:
     def replace_planet_file(self, new_planet_path: Path) -> bool:
         """
         替换planet文件
-        
+
         Args:
             new_planet_path: 新的planet文件路径
-            
+
         Returns:
             bool: 替换是否成功
-            
+
         Raises:
             FileOperationError: 文件操作失败时抛出
             CustomPermissionError: 权限不足时抛出
             PlatformNotSupportedError: 不支持的平台时抛出
         """
         # 检查平台支持
-        if self.platform not in [PLATFORM_MACOS, PLATFORM_WINDOWS]:
+        if self.platform not in [PLATFORM_MACOS, PLATFORM_WINDOWS, PLATFORM_LINUX]:
             raise PlatformNotSupportedError(f"不支持的平台: {self.platform}")
         
         # 检查权限

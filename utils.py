@@ -127,12 +127,12 @@ def ensure_admin_privileges() -> bool:
 def check_zerotier_installed() -> bool:
     """
     检查ZeroTier是否已安装
-    
+
     Returns:
         bool: 是否已安装ZeroTier
     """
     system = platform.system().lower()
-    
+
     if system == "darwin":  # macOS
         zerotier_path = Path("/Library/Application Support/ZeroTier/One")
         cli_path = Path("/usr/local/bin/zerotier-cli")
@@ -140,7 +140,11 @@ def check_zerotier_installed() -> bool:
     elif system == "windows":
         zerotier_path = Path("C:/ProgramData/ZeroTier/One")
         return zerotier_path.exists()
-    
+    elif system == "linux":  # Linux
+        zerotier_path = Path("/var/lib/zerotier-one")
+        cli_path = Path("/usr/sbin/zerotier-cli")
+        return zerotier_path.exists() or cli_path.exists()
+
     return False
 
 

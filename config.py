@@ -32,6 +32,8 @@ class Config:
             return Path("/Library/Application Support/ZeroTier/One")
         elif system == "windows":
             return Path("C:/ProgramData/ZeroTier/One")
+        elif system == "linux":
+            return Path("/var/lib/zerotier-one")
         else:
             raise OSError(f"不支持的操作系统: {system}")
     
@@ -42,8 +44,8 @@ class Config:
     
     @property
     def pid_file_path(self) -> Optional[Path]:
-        """获取PID文件路径（仅macOS）"""
-        if platform.system().lower() == "darwin":
+        """获取PID文件路径"""
+        if platform.system().lower() == "linux":
             return self.zerotier_path / "zerotier-one.pid"
         return None
     

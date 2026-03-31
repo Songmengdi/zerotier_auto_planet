@@ -113,16 +113,19 @@ class ZeroTierAutoApp(LoggerMixin):
                 # 这里我们只需要停止部分，所以直接调用平台特定的停止方法
                 import platform
                 system = platform.system().lower()
-                
+
                 if system == "darwin":  # macOS
                     if not self.service_manager._stop_zerotier_macos():
                         self.logger.warning("停止ZeroTier服务失败，但继续执行")
                 elif system == "windows":  # Windows
                     if not self.service_manager._stop_zerotier_windows():
                         self.logger.warning("停止ZeroTier服务失败，但继续执行")
+                elif system == "linux":  # Linux
+                    if not self.service_manager._stop_zerotier_linux():
+                        self.logger.warning("停止ZeroTier服务失败，但继续执行")
                 else:
                     self.logger.warning(f"不支持的平台: {system}")
-                    
+
             except Exception as e:
                 self.logger.warning(f"停止ZeroTier服务时出错: {e}，但继续执行")
             
@@ -138,12 +141,15 @@ class ZeroTierAutoApp(LoggerMixin):
             try:
                 import platform
                 system = platform.system().lower()
-                
+
                 if system == "darwin":  # macOS
                     if not self.service_manager._start_zerotier_macos():
                         raise ServiceError("启动ZeroTier服务失败")
                 elif system == "windows":  # Windows
                     if not self.service_manager._start_zerotier_windows():
+                        raise ServiceError("启动ZeroTier服务失败")
+                elif system == "linux":  # Linux
+                    if not self.service_manager._start_zerotier_linux():
                         raise ServiceError("启动ZeroTier服务失败")
                 else:
                     raise ServiceError(f"不支持的平台: {system}")
@@ -175,7 +181,7 @@ class ZeroTierAutoApp(LoggerMixin):
             else:
                 self.logger.warning("⚠️  Planet文件更新完成，但未检测到PLANET角色")
             
-            # 步骤8: 启动ZeroTier GUI客户端（仅macOS需要单独启动GUI）
+            # 步骤8: 启动ZeroTier GUI客户端（仅macOS和Windows需要）
             import platform
             system = platform.system().lower()
             if system == "darwin":  # macOS需要单独启动GUI
@@ -184,9 +190,12 @@ class ZeroTierAutoApp(LoggerMixin):
                     self.logger.info("✅ ZeroTier GUI客户端启动成功")
                 else:
                     self.logger.warning("⚠️  ZeroTier GUI客户端启动失败，但服务正常运行")
-            else:
+            elif system == "windows":
                 # Windows的GUI已经在_start_zerotier_windows中启动了
                 self.logger.info("8. ZeroTier GUI客户端已随服务启动")
+            else:
+                # Linux没有GUI客户端
+                self.logger.info("8. Linux平台无需GUI客户端")
             
             # 清理旧备份
             self.file_manager.cleanup_old_backups()

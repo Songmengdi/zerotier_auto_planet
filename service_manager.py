@@ -8,7 +8,7 @@ from typing import Optional
 
 from config import Config
 from exceptions import ServiceError, PlatformNotSupportedError
-from constants import PLATFORM_MACOS, PLATFORM_WINDOWS, ZEROTIER_SERVICE_NAME
+from constants import PLATFORM_MACOS, PLATFORM_WINDOWS, PLATFORM_LINUX, ZEROTIER_SERVICE_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -677,7 +677,7 @@ class ServiceManager:
             PlatformNotSupportedError: 不支持的平台时抛出
             ServiceError: 服务操作失败时抛出
         """
-        if self.platform not in [PLATFORM_MACOS, PLATFORM_WINDOWS]:
+        if self.platform not in [PLATFORM_MACOS, PLATFORM_WINDOWS, PLATFORM_LINUX]:
             raise PlatformNotSupportedError(f"不支持的平台: {self.platform}")
         
         try:
@@ -714,7 +714,7 @@ class ServiceManager:
     def check_zerotier_status(self) -> bool:
         """
         检查ZeroTier服务状态
-        
+
         Returns:
             bool: 服务是否正在运行
         """
@@ -722,12 +722,15 @@ class ServiceManager:
             if self.platform == PLATFORM_MACOS:
                 # 检查后台服务是否运行（这是主要的服务状态）
                 return self._check_zerotier_daemon_running()
-                
+
             elif self.platform == PLATFORM_WINDOWS:
                 return self._check_zerotier_service_running_windows()
-            
+
+            elif self.platform == PLATFORM_LINUX:
+                return self._check_zerotier_service_running_linux()
+
             return False
-            
+
         except Exception as e:
             self.logger.error(f"检查ZeroTier服务状态失败: {e}")
             return False
@@ -752,20 +755,27 @@ class ServiceManager:
                 r"C:\Program Files (x86)\ZeroTier\One\zerotier-cli.exe",
                 r"C:\Program Files\ZeroTier\One\zerotier-cli.exe"
             ]
+        elif self.platform == "linux":  # Linux
+            return [
+                "zerotier-cli",
+                "/usr/sbin/zerotier-cli",
+                "/usr/local/bin/zerotier-cli",
+                "/usr/bin/zerotier-cli"
+            ]
         else:
             return ["zerotier-cli"]
     
     def verify_zerotier_peers(self) -> bool:
         """
         验证ZeroTier连接状态
-        
+
         Returns:
             bool: 是否能看到PLANET角色
         """
         try:
             # 尝试不同的zerotier-cli路径
             cli_paths = self._get_zerotier_cli_paths()
-            
+
             for cli_path in cli_paths:
                 try:
                     # 根据CLI路径选择不同的命令格式
@@ -775,7 +785,7 @@ class ServiceManager:
                     else:
                         # 使用传统的 zerotier-cli peers 格式
                         success, output = self._run_command([cli_path, "peers"])
-                    
+
                     if success:
                         has_planet = "PLANET" in output.upper()
                         self.logger.info(f"ZeroTier peers检查: {'发现PLANET角色' if has_planet else '未发现PLANET角色'}")
@@ -785,10 +795,140 @@ class ServiceManager:
                 except Exception as e:
                     self.logger.debug(f"尝试{cli_path}失败: {e}")
                     continue
-            
+
             self.logger.error("所有zerotier-cli路径都失败了")
             return False
-                
+
         except Exception as e:
             self.logger.error(f"验证ZeroTier peers失败: {e}")
+            return False
+
+    def _check_zerotier_service_running_linux(self) -> bool:
+        """
+        检查Linux上的ZeroTier服务状态
+
+        Returns:
+            bool: 服务是否正在运行
+        """
+        try:
+            # 方法1: 检查systemd服务状态（主要方法）
+            success, output = self._run_command([
+                "systemctl", "is-active", "zerotier-one"
+            ])
+            if success and output == "active":
+                self.logger.debug("通过systemctl检测到ZeroTier服务运行中")
+                return True
+
+            # 方法2: 检查进程（更精确的匹配）
+            success, output = self._run_command([
+                "pgrep", "-x", "zerotier-one"
+            ])
+            if success and output:
+                self.logger.debug("通过pgrep检测到ZeroTier进程运行中")
+                return True
+
+            # 方法3: 检查TCP端口9993是否被监听
+            success, output = self._run_command([
+                "ss", "-tlnp", "|", "grep", ":9993"
+            ])
+            if success and "zerotier" in output.lower():
+                self.logger.debug("通过端口检测到ZeroTier服务运行中")
+                return True
+
+            self.logger.debug("未检测到ZeroTier服务运行")
+            return False
+
+        except Exception as e:
+            self.logger.error(f"检查ZeroTier服务状态失败: {e}")
+            return False
+
+    def _stop_zerotier_linux(self) -> bool:
+        """
+        停止Linux上的ZeroTier服务
+
+        Returns:
+            bool: 是否成功停止
+        """
+        try:
+            # 检查当前运行状态
+            service_running = self._check_zerotier_service_running_linux()
+
+            if not service_running:
+                self.logger.info("ZeroTier服务未运行")
+                return True
+
+            self.logger.info("使用systemctl停止ZeroTier服务")
+            success, output = self._run_command([
+                "systemctl", "stop", "zerotier-one"
+            ])
+
+            if success:
+                self.logger.info("systemctl停止服务命令执行成功")
+                time.sleep(5)  # 增加等待时间，等待服务完全停止
+
+                # 检查服务是否停止
+                if not self._check_zerotier_service_running_linux():
+                    self.logger.info("ZeroTier服务已成功停止")
+                    return True
+                else:
+                    self.logger.warning("systemctl执行成功但服务仍在运行")
+                    # 尝试使用 kill 命令强制停止
+                    self.logger.info("尝试使用 kill 命令强制停止")
+                    success, output = self._run_command([
+                        "pkill", "-9", "-x", "zerotier-one"
+                    ])
+                    if success:
+                        self.logger.info("kill 命令执行成功")
+                        time.sleep(2)
+                        if not self._check_zerotier_service_running_linux():
+                            self.logger.info("ZeroTier服务已成功停止")
+                            return True
+                    else:
+                        self.logger.warning(f"kill 命令失败: {output}")
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"停止ZeroTier服务失败: {e}")
+            return False
+
+    def _start_zerotier_linux(self) -> bool:
+        """
+        启动Linux上的ZeroTier服务
+
+        Returns:
+            bool: 是否成功启动
+        """
+        try:
+            # 检查服务是否已经在运行
+            if self._check_zerotier_service_running_linux():
+                self.logger.info("ZeroTier服务已经在运行")
+                return True
+
+            self.logger.info("使用systemctl启动ZeroTier服务")
+            success, output = self._run_command([
+                "systemctl", "start", "zerotier-one"
+            ])
+
+            if success:
+                self.logger.info("systemctl启动服务命令执行成功")
+
+                # 等待服务启动
+                for i in range(15):  # 最多等待15秒
+                    time.sleep(1)
+                    if self._check_zerotier_service_running_linux():
+                        self.logger.info("ZeroTier服务启动成功")
+                        # 再等待一下让服务完全初始化
+                        time.sleep(2)
+                        return True
+                    self.logger.debug(f"等待服务启动... ({i+1}/15)")
+
+                self.logger.warning("systemctl启动服务超时")
+            else:
+                self.logger.warning(f"systemctl启动服务失败: {output}")
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"启动ZeroTier服务失败: {e}")
             return False
